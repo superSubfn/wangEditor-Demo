@@ -1,0 +1,140 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>无标题文档</title>
+<script type="text/javascript" src="js/jquery.min.js"></script>
+<script type="text/javascript" src="js/qiniu.min.js"></script>
+<script type="text/javascript" src="plupload/plupload.full.min.js"></script>
+<script type="text/javascript" src="wangEditor/release/wangEditor.min.js"></script>
+<script type="text/javascript">
+	$(function(){
+		initEditor('firstEditor','firstBtn','这是一个标题','min');
+		initEditor('secondEditor','secondBtn','这是一个内容','max');
+	})
+	
+	//初始化富文本编辑器
+    function initEditor(editId,testsubmitBtn,data,height){
+    	var E = window.wangEditor
+        var editor = new E('#'+editId)
+        // 自定义菜单配置
+        editor.customConfig.menus = [
+	        'head',  // 标题
+		    'bold',  // 粗体
+		    'fontSize',  // 字号
+		    'fontName',  // 字体
+		    'italic',  // 斜体
+		    'underline',  // 下划线
+		    'strikeThrough',  // 删除线
+		    'foreColor',  // 文字颜色
+		    'backColor',  // 背景颜色
+		    'list',  // 列表
+			'justify',  // 对齐方式
+			'image',  // 插入图片
+			'table',  // 表格
+			'undo',  // 撤销
+			'redo'  // 重复
+	    ]
+        editor.customConfig.qiniu = true
+        editor.create()
+		// 定义编辑器高度
+        if(height == 'max'){
+	        $('#'+editId).children('.w-e-text-container').attr('style','border:1px solid #ccc; border-top:none; height:500px; z-index:10000;');
+        }else if(height == 'min'){
+        	$('#'+editId).children('.w-e-text-container').attr('style','border:1px solid #ccc; border-top:none; height:200px; z-index:10000;');
+        }
+        $('#'+editId).attr('style','height:auto;');
+		// 定义编辑器初始内容
+        if (data != undefined && data != null && data != ""){
+	        editor.txt.html(data)
+        }else{
+        	editor.txt.clear()
+        }
+        // 初始化七牛上传
+		uploadInit(editor)
+		// 获取编辑器内容
+		document.getElementById(testsubmitBtn).addEventListener('click', function () {
+			if(editor.txt.html()!=new String('<p><br></p>')){
+				alert(editId + "内容：" + editor.txt.html());
+	        }
+	    }, false)
+    }
+	
+	// 初始化七牛上传的方法
+	function uploadInit(editors) {
+	    // 获取相关 DOM 节点的 ID
+	    var btnId = editors.imgMenuId;
+	    var containerId = editors.toolbarElemId;
+	    var textElemId = editors.textElemId;
+		
+	    // 创建上传对象
+	    var uploader = Qiniu.uploader({
+	        runtimes: 'html5,flash,html4',    //上传模式,依次退化
+	        browse_button: btnId,       //上传选择的点选按钮，**必需**
+	        uptoken_url: 'http://localhost:8080/api/open/qiNiu/getUpToken.do', //Ajax请求upToken的Url，**强烈建议设置**（服务端提供）
+	        unique_names: true, // 默认 false，key为文件名。若开启该选项，SDK会为每个文件自动生成key（文件名）
+	        domain: 'http://invoice.mayn.com.cn/', //bucket 域名，下载资源时用到，**必需**
+	        container: containerId,           //上传区域DOM ID，默认是browser_button的父元素，
+	        max_file_size: '100mb',           //最大文件体积限制
+			flash_swf_url: 'plupload/Moxie.swf',  //引入flash,相对路径
+	        filters: {
+				mime_types: [
+				  //只允许上传图片文件 （注意，extensions中，逗号后面不要加空格）
+				  { title: "图片文件", extensions: "jpg,gif,png,bmp" }
+				]
+	        },
+	        max_retries: 3,                   //上传失败最大重试次数
+	        dragdrop: true,                   //开启可拖曳上传
+	        drop_element: textElemId,        //拖曳上传区域元素的ID，拖曳文件或文件夹后可触发上传
+	        chunk_size: '4mb',                //分块上传时，每片的体积
+	        auto_start: true,                 //选择文件后自动上传，若关闭需要自己绑定事件触发上传
+	        init: {
+	            'FilesAdded': function(up, files) {
+	                plupload.each(files, function(file) {
+	                    // 文件添加进队列后,处理相关的事情
+	                    printLog('on FilesAdded');
+	                });
+	            },
+	            'BeforeUpload': function(up, file) {
+	                // 每个文件上传前,处理相关的事情
+	                printLog('on BeforeUpload');
+	            },
+	            'UploadProgress': function(up, file) {
+	                // 显示进度
+	                printLog('进度 ' + file.percent)
+	            },
+	            'FileUploaded': function(up, file, info) {
+					// 每个文件上传成功后,处理相关的事情
+	                printLog(info);
+	                var domain = up.getOption('domain');
+	                var res = $.parseJSON(info);
+	                var sourceLink = domain + res.key; //获取上传成功后的文件的Url
+	                printLog(sourceLink);
+	                // 插入图片到editor
+	                editors.cmd.do('insertHtml', '<img src="' + sourceLink + '" style="max-width:100%;"/>')
+	            },
+	            'Error': function(up, err, errTip) {
+	                //上传出错时,处理相关的事情
+	                printLog('on Error');
+	            },
+	            'UploadComplete': function() {
+	                //队列文件处理完毕后,处理相关的事情
+	                printLog('on UploadComplete');
+	            }
+	        }
+	    });
+	}
+	
+	function printLog(title, info) {
+	    window.console && console.log(title, info);
+	}
+</script>
+</head>
+<body>
+	<div id="firstEditor"></div>
+    <br />
+    <div id="secondEditor"></div>
+    <button id="firstBtn" style="width:30%;height:32px;margin-left:25px;">获取标题</button>
+    <button id="secondBtn" style="width:30%;height:32px;margin-top:25px;">获取内容</button>
+</body>
+</html>
